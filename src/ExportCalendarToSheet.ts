@@ -120,12 +120,12 @@ export function processUserInput(
 		SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 	sheet.clear(); // Clear old data
 
-  const range = sheet.getRange("A2:A200"); // Dropdown in A2 to 200
-  const values = getArtistData().map((artist) => artist.artistName);
-  const rule = SpreadsheetApp.newDataValidation()
-  .requireValueInList(values)
-  .setAllowInvalid(true) // Prevents invalid entries
-  .build();
+//   const range = sheet.getRange("A2:A200"); // Dropdown in A2 to 200
+//   const values = getArtistData().map((artist) => artist.artistName);
+//   const rule = SpreadsheetApp.newDataValidation()
+//   .requireValueInList(values)
+//   .setAllowInvalid(true) // Prevents invalid entries
+//   .build();
   // range.setDataValidation(rule)
 
 	// Fetch events
