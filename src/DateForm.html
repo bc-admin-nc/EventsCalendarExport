@@ -56,6 +56,18 @@
 	</div>
 
 	<script>
+		function formatDate(date) {
+			return date.toISOString().split('T')[0];
+		}
+
+		const todayFormatted = formatDate(new Date());
+		document.getElementById("startDateInput").value = todayFormatted;
+
+		let futureDate = new Date();
+		futureDate.setDate(futureDate.getDate()+7);
+		let futureDateFormatted = formatDate(futureDate);
+		document.getElementById("endDateInput").value = futureDateFormatted;
+
 		function submitDate() {
 			var startDate = document.getElementById('startDateInput').value;
 			var endDate = document.getElementById('endDateInput').value;
