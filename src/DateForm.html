@@ -71,7 +71,7 @@
 		function submitDate() {
 			var startDate = document.getElementById('startDateInput').value;
 			var endDate = document.getElementById('endDateInput').value;
-			google.script.run.processUserInput(startDate, endDate);
+			google.script.run.main(startDate, endDate);
 			google.script.host.close();
 		}
 	</script>
