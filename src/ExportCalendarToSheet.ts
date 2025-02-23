@@ -10,6 +10,8 @@ const matchAlgorithm: matchAlgorithmType = "jaroWinkler";
 // Read the sheets values into these variables
 const venueDataRows = readSheetById(VenueSheetId);
 const artistDataRows = readSheetById(BandsSheetId);
+const lookupSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
+lookupSheet?.clearContents();
 
 type matchAlgorithmType = "jaroWinkler" | "levenshteinDistance" | "off";
 export type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
@@ -75,6 +77,7 @@ export type VenueDataType = {
 	venueCity?: string,
 	venueNeighborHood?: string,
 	venueZip?: string,
+	venuePhone?: string,
 }
 
 export type ArtistDataType = {
@@ -163,29 +166,29 @@ export function convertEventToRow(
  	const { venue, found: foundVenue } = matchVenue(searchVenue);
 	const { artist, found: foundArtist } = matchArtist(searchArtitst);
 
+	let misMatchData = "";
+
 	if (!foundVenue) {
 		Logger.log(`No match found for venue: ${venue.venueName}`);
-		// Add to Lookup Tab
-		const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
-		if (!sheet) {
-			throw new Error("Sheet 'LOOKUP' not found");
-		}
-		sheet.appendRow(["Venue", venue.venueName])
+		lookupSheet?.appendRow(["Venue", venue.venueName])
 	}
 
 	if (!foundArtist) {
 		Logger.log(`No match found for artist: ${artist.artistName}`);
-		// Add to Lookup tab
-		const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
-		if (!sheet) {
-			throw new Error("Sheet 'LOOKUP' not found");
-		}
-		sheet.appendRow(["Artist", artist.artistName])
+		lookupSheet?.appendRow(["Artist", artist.artistName])
+	}
+
+	if (!foundVenue && !foundArtist) {
+		misMatchData += 'Artist & Venue mismatch'
+	} else if (!foundVenue && foundArtist) {
+		misMatchData += 'Venue mismatch'
+	} else if (foundVenue && !foundArtist) {
+		misMatchData += 'Artist mismatch'
 	}
 	
 	const row = {
 		"Event Title": artist.artistName,
-		"Event SEO Title": "",
+		"Event SEO Title": misMatchData,
 		"Event email": "",
 		"Event URL": "",
 		"Event Venue": venue.venueName,
@@ -216,9 +219,9 @@ export function convertEventToRow(
 		"Event Postal Code": venue?.venueZip,
 		"Event Latitude": "",
 		"Event Longitude": "",
-		"Event Phone": "",
+		"Event Phone": venue.venuePhone,
 		"Event Short Description": "",
-		"Event Long Description": "",
+		"Event Long Description": calEvent.getDescription(),
 		"Event SEO Description": "",
 		"Event Keywords": "",
 		"Event Renewal Date": "",
@@ -303,6 +306,7 @@ function getVenueData(): VenueDataType[] {
 			venueCity: row[12],
 			venueNeighborHood: row[14],
 			venueZip: row[16],
+			venuePhone: row[19],
 		};
 	});
 	return venueData.sort((a, b) => a.venueName.localeCompare(b.venueName));
