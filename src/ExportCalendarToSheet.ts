@@ -1,9 +1,17 @@
+// Google ID references (sheets, calendar, etc)
 const VenueSheetId = "1y55O_-39m1YBUEWInNKYUFbxrKLehpLKpyklgV_tFqA";
 const BandsSheetId = "1Y_c0qHMdTQlBrSzHYWT1cdelnucRU2rTLae3fQW4UHU";
 const calendarId = "localmusic@bandsandclubsofthetriangle.com";
 
-const FIRST_DATA_ROW = 2;	// start populating sheet on this row
+const FIRST_DATA_ROW = 2; // start populating sheet on this row
+const MATCH_THRESHOLD = 0.9; // used for fuzzy matching
+const matchAlgorithm: matchAlgorithmType = "jaroWinkler";
 
+// Read the sheets values into these variables
+const venueDataRows = readSheetById(VenueSheetId);
+const artistDataRows = readSheetById(BandsSheetId);
+
+type matchAlgorithmType = "jaroWinkler" | "levenshteinDistance" | "off";
 export type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
 export type RECURRING = "S" | "W" | "B" | "M" | "Y";
 export type CATEGORY1 =
@@ -55,6 +63,24 @@ export type CATEGORY4 =
 export type rowType = {
 	[key: string]: string | number | Date | undefined;
 };
+
+export type VenueDataType = {
+	venueName: string,
+	venueAddress?: string,
+	venueCountry?: string,
+	venueCountryAbbreviation?: string,
+	venueRegion?: string,
+	venueState?: string,
+	venueStateAbbreviation?: string,
+	venueCity?: string,
+	venueNeighborHood?: string,
+	venueZip?: string,
+}
+
+export type ArtistDataType = {
+	artistName: string,
+	genre?: string
+}
 
 interface Event {
 	getStartTime(): Date;
@@ -120,52 +146,50 @@ function getCalenderEvents(
 	return calendarEvents;
 }
 
-export const parseLocation = (eventLocation: string) => {
-	let venue = "VENUE";
-	let street = "STREET";
-	let city = "CITY";
-	let state = "STATE";
-	let zip = "ZIP";
-	const country = "United States";
-	const countryAbbreviation = "USA";
-	const parsed = eventLocation.split(",");
-
+export const parseLocation = (eventLocation: string): string => {
+	// try to parse the venue from the eventLocation
 	const regex = /^(.*?);?\s*(.*?),\s*(.*?),\s*([A-Z]{2})\s*(\d{5}),\s*(\w+)$/;
-
 	const match = eventLocation.match(regex);
 
-	if (match) {
-		venue = match[1] || "N/A";
-		street = match[2];
-		city = match[3];
-		state = match[4];
-		zip = match[5];
-	}
-
-	return {
-		venue,
-		street,
-		city,
-		state,
-		zip,
-		country,
-		countryAbbreviation,
-	};
+	// either the parsed value or the entire eventLocation
+	return match ? match[2] : eventLocation;
 };
 
 export function convertEventToRow(
 	calEvent: GoogleAppsScript.Calendar.CalendarEvent,
 ): rowType {
-	const { venue, street, city, state, zip, country, countryAbbreviation } =
-		parseLocation(calEvent.getLocation());
+	const searchVenue = parseLocation(calEvent.getLocation());
+	const searchArtitst = calEvent.getTitle();
+ 	const { venue, found: foundVenue } = matchVenue(searchVenue);
+	const { artist, found: foundArtist } = matchArtist(searchArtitst);
 
+	if (!foundVenue) {
+		Logger.log(`No match found for venue: ${venue.venueName}`);
+		// Add to Lookup Tab
+		const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
+		if (!sheet) {
+			throw new Error("Sheet 'LOOKUP' not found");
+		}
+		sheet.appendRow(["Venue", venue.venueName])
+	}
+
+	if (!foundArtist) {
+		Logger.log(`No match found for artist: ${artist.artistName}`);
+		// Add to Lookup tab
+		const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
+		if (!sheet) {
+			throw new Error("Sheet 'LOOKUP' not found");
+		}
+		sheet.appendRow(["Artist", artist.artistName])
+	}
+	
 	const row = {
-		"Event Title": calEvent.getTitle(),
-		"Event SEO Title": calEvent.getTitle(),
+		"Event Title": artist.artistName,
+		"Event SEO Title": "",
 		"Event email": "",
 		"Event URL": "",
-		"Event Venue": venue,
-		"Event Address": `${street}, ${city}, ${state}, ${zip}`,
+		"Event Venue": venue.venueName,
+		"Event Address": venue?.venueAddress,
 		"Event Contact Name": "",
 		"Event Start Date": Utilities.formatDate(
 			calEvent.getStartTime(),
@@ -179,18 +203,17 @@ export function convertEventToRow(
 		),
 		"Event Start Time": calEvent.getStartTime().toLocaleTimeString(),
 		"Event End Time": calEvent.getEndTime().toLocaleTimeString(),
-		"Event Country": country,
-		"Event Country Abbreviation": countryAbbreviation,
-		"": "",
-		"Event Region": "",
+		"Event Country": venue?.venueCountry,
+		"Event Country Abbreviation": venue?.venueCountryAbbreviation,
+		"Event Region": venue?.venueRegion,
 		"Event Region Abbreviation": "",
-		"Event State": state,
-		"Event State Abbreviation": "",
-		"Event City": city,
+		"Event State": venue?.venueState,
+		"Event State Abbreviation": venue?.venueStateAbbreviation,
+		"Event City": venue?.venueCity,
 		"Event City Abbreviation": "",
-		"Event Neighborhood": "",
+		"Event Neighborhood": venue?.venueNeighborHood,
 		"Event Neighborhood Abbreviation": "",
-		"Event Postal Code": zip,
+		"Event Postal Code": venue?.venueZip,
 		"Event Latitude": "",
 		"Event Longitude": "",
 		"Event Phone": "",
@@ -235,59 +258,175 @@ export function convertEventToRow(
 	return row;
 }
 
-function main(
-	startDateString: string,
-	endDateString: string,
-): rowType[] {
-	const startDate: Date = new Date(startDateString);
-	const endDate: Date = new Date(endDateString);
+function writeRowsToSheet(rawData: rowType[]) {
+	const data = rawData.map((item) => Object.values(item));
 
 	const sheet: GoogleAppsScript.Spreadsheet.Sheet =
 		SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-	const lastRow = sheet.getLastRow();
+	const numRows = data.length;
+	const numCols = data[0].length;
 	sheet
-		.getRange(FIRST_DATA_ROW, 1, lastRow - 3, sheet.getLastColumn())
-		.clearContent();
-
-	// Fetch events
-	const calendarEvents = getCalenderEvents(startDate, endDate);
-	const rows = calendarEvents.map((event) => convertEventToRow(event));
-	rows.map((row) => sheet.appendRow(Object.values(row)));
-	return rows;
+		.getRange(FIRST_DATA_ROW, 1, numRows, numCols)
+		.setValues(Object.values(data));
 }
 
+// for a given date range:
+// 1. query a google calendar
+// 2. convert event data to row data (attempt to match with known values)
+// 3. write data rows to associated Google Sheet
+function main(startDateString: string, endDateString: string): rowType[] {
+	const startDate: Date = new Date(startDateString);
+	const endDate: Date = new Date(endDateString);
+	const calendarEvents = getCalenderEvents(startDate, endDate); // query a google calendar
+	const dataRows = calendarEvents.map((event) => convertEventToRow(event)); // convert event to data to row data
+	writeRowsToSheet(dataRows); // write data rows to associated Google Sheet
+	return dataRows;
+}
 
+// fetch and match routines from other sheets
+function readSheetById(sheetId: string): string[][] {
+	const sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1"); // Change sheet name if needed
+	const data = sheet?.getDataRange().getValues();
+	return data || [];
+}
 
-// function readSheetById(
-// 	sheetId = "1y55O_-39m1YBUEWInNKYUFbxrKLehpLKpyklgV_tFqA",
-// ): string[][] {
-// 	const sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1"); // Change sheet name if needed
-// 	const data = sheet?.getDataRange().getValues();
-// 	return data || [];
-// }
+function getVenueData(): VenueDataType[] {
+	const venueData = venueDataRows.map((row) => {
+		return {
+			venueName: row[0],
+			venueAddress: row[4],
+			venueCountry: row[6],
+			venueCountryAbbreviation: row[7],
+			venueRegion: row[8],
+			venueState: row[10],
+			venueStateAbbreviation: row[11],
+			venueCity: row[12],
+			venueNeighborHood: row[14],
+			venueZip: row[16],
+		};
+	});
+	return venueData.sort((a, b) => a.venueName.localeCompare(b.venueName));
+}
 
-// function getVenueData() {
-// 	const data = readSheetById(VenueSheetId);
-// 	const venueData = data.map((row) => {
-// 		return {
-// 			venueName: row[0],
-// 			venuAddress: `${row[1]}, ${row[2]}, ${row[3]}, ${row[4]}`,
-// 			venueStreet: row[1],
-// 			venueCity: row[2],
-// 			venueState: row[3],
-// 			venueZip: row[4],
-// 		};
-// 	});
-// 	return venueData.sort((a, b) => a.venueName.localeCompare(b.venueName));
-// }
+function getArtistData(): ArtistDataType[] {
+	const artistData = artistDataRows.map((row) => {
+		return {
+			artistName: row[0],
+			genre: row[1],
+		};
+	});
+	return artistData.sort((a, b) => a.artistName.localeCompare(b.artistName));
+}
 
-// function getArtistData() {
-// 	const data = readSheetById(BandsSheetId);
-// 	const artistData = data.map((row) => {
-// 		return {
-// 			artistName: row[0],
-// 			genre: row[1],
-// 		};
-// 	});
-// 	return artistData.sort((a, b) => a.artistName.localeCompare(b.artistName));
-// }
+function matchVenue(venueName: string): { venue: VenueDataType, found: boolean } {
+	const venueData = getVenueData();
+	const filtered = venueData.filter((venue) => matchWrapper(venue.venueName, venueName));
+	return (filtered.length === 0) ? {venue: {venueName}, found: false} : {venue: filtered[0], found: true}
+}
+
+function matchArtist(artistName: string): { artist: ArtistDataType; found: boolean } {
+	const artistData = getArtistData();
+	const filtered = artistData.filter((artist) => matchWrapper(artist.artistName, artistName));
+	return (filtered.length === 0) ? { artist: {artistName}, found: false } : { artist: filtered[0], found: true };
+}
+
+function matchWrapper(string1: string, string2: string) {
+	if (matchAlgorithm === "jaroWinkler") {
+		return jaroWinkler(string1, string2) > MATCH_THRESHOLD;
+	}
+
+	if (matchAlgorithm === "levenshteinDistance") {
+		return levenshteinDistance(string1, string2) > 1 - MATCH_THRESHOLD;
+	}
+	return true;
+}
+
+// Alogrithm used to fuzzy match 2 strings.  0-1, where higher is a better match
+// Higher similarity score (0 to 1) = More similar strings
+function jaroWinkler(s1: string, s2: string) {
+	let m = 0;
+	let i: number;
+	let j: number;
+	let t = 0;
+	const matchDistance = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+	const s1Matches = new Array(s1.length).fill(false);
+	const s2Matches = new Array(s2.length).fill(false);
+
+	for (i = 0; i < s1.length; i++) {
+		const start = Math.max(0, i - matchDistance);
+		const end = Math.min(i + matchDistance + 1, s2.length);
+
+		for (j = start; j < end; j++) {
+			if (s2Matches[j]) continue;
+			if (s1[i] !== s2[j]) continue;
+			s1Matches[i] = s2Matches[j] = true;
+			m++;
+			break;
+		}
+	}
+
+	if (m === 0) return 0;
+
+	let k = 0;
+	for (i = 0; i < s1.length; i++) {
+		if (!s1Matches[i]) continue;
+		while (!s2Matches[k]) k++;
+		if (s1[i] !== s2[k]) t++;
+		k++;
+	}
+
+	t /= 2;
+
+	const jaro = (m / s1.length + m / s2.length + (m - t) / m) / 3;
+	let prefixLength = 0;
+
+	for (i = 0; i < Math.min(s1.length, s2.length, 4); i++) {
+		if (s1[i] === s2[i]) prefixLength++;
+		else break;
+	}
+
+	return jaro + prefixLength * 0.1 * (1 - jaro);
+}
+
+// Lower distance = More similar strings
+function levenshteinDistance(str1: string, str2: string) {
+	const len1 = str1.length;
+	const len2 = str2.length;
+	const matrix = [];
+
+	if (len1 === 0) return len2;
+	if (len2 === 0) return len1;
+
+	for (let i = 0; i <= len1; i++) {
+		matrix[i] = [i];
+	}
+	for (let j = 0; j <= len2; j++) {
+		matrix[0][j] = j;
+	}
+
+	for (let i = 1; i <= len1; i++) {
+		for (let j = 1; j <= len2; j++) {
+			if (str1[i - 1] === str2[j - 1]) {
+				matrix[i][j] = matrix[i - 1][j - 1];
+			} else {
+				matrix[i][j] = Math.min(
+					matrix[i - 1][j] + 1, // Deletion
+					matrix[i][j - 1] + 1, // Insertion
+					matrix[i - 1][j - 1] + 1, // Substitution
+				);
+			}
+		}
+	}
+
+	return matrix[len1][len2];
+}
+
+// Example usage
+function test_fuzzyMatching() {
+	const str1 = "fuzzy matching";
+	const str2 = "fuzzi matcing";
+	const distance1 = jaroWinkler(str1, str2);
+	Logger.log(`jaroWinkler Distance: ${distance1}`);
+	const distance2 = levenshteinDistance(str1, str2);
+	Logger.log(`Levenshtein Distance: ${distance2}`);
+}
