@@ -14,27 +14,27 @@ const lookupSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP
 lookupSheet?.clearContents();
 
 type matchAlgorithmType = "jaroWinkler" | "levenshteinDistance" | "off";
-export type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
-export type RECURRING = "S" | "W" | "B" | "M" | "Y";
-export type CATEGORY1 =
+type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
+type RECURRING = "S" | "W" | "B" | "M" | "Y";
+type CATEGORY1 =
 	| "Live Artists"
 	| "Dance"
 	| "Jam/Open Mic"
 	| "Karaoke"
 	| "Bingo/Trivia";
-export type CATEGORY2 =
+type CATEGORY2 =
 	| "Band/Choir"
 	| "DJ/Emcee"
 	| "Duo/Trio/Quartet"
 	| "Solo"
 	| "Symphony/Big Band";
-export type CATEGORY3 =
+type CATEGORY3 =
 	| "Local Venue"
 	| "Indoor Theatre"
 	| "Outdoor Concert"
 	| "Dance Hall"
 	| "Festival";
-export type CATEGORY4 =
+type CATEGORY4 =
 	| "Alternative"
 	| "Bluegrass"
 	| "Blues"
@@ -62,11 +62,11 @@ export type CATEGORY4 =
 	| "Electronic"
 	| "World"
 	| "Other";
-export type rowType = {
+type rowType = {
 	[key: string]: string | number | Date | undefined;
 };
 
-export type VenueDataType = {
+type VenueDataType = {
 	venueName: string,
 	venueAddress?: string,
 	venueCountry?: string,
@@ -80,11 +80,10 @@ export type VenueDataType = {
 	venuePhone?: string,
 }
 
-export type ArtistDataType = {
+type ArtistDataType = {
 	artistName: string,
 	genre?: string
 }
-
 interface Event {
 	getStartTime(): Date;
 	getEndTime(): Date;
@@ -106,18 +105,7 @@ function test_getCalendarEvents() {
 	return events;
 }
 
-const test_parseLocation = () => {
-	const testString = "";
-	const { venue, street, city, state, zip } = parseLocation(testString);
-
-	Logger.log(`Venue: ${venue}`);
-	Logger.log(`Street: ${street}`);
-	Logger.log(`City: ${city}`);
-	Logger.log(`State: ${state}`);
-	Logger.log(`Zip: ${zip}`);
-};
-
-export function getTestDates() {
+function getTestDates() {
 	const startDate = new Date();
 	const endDate = new Date();
 	endDate.setDate(endDate.getDate() + 1);
@@ -142,14 +130,16 @@ function getCalenderEvents(
 	startDate: Date,
 	endDate: Date,
 ): GoogleAppsScript.Calendar.CalendarEvent[] {
-	const calendarEvents = CalendarApp.getCalendarById(calendarId).getEvents(
+	const calendar = CalendarApp.getCalendarById(calendarId);
+
+	const calendarEvents = calendar.getEvents(
 		startDate,
 		endDate,
 	);
 	return calendarEvents;
 }
 
-export const parseLocation = (eventLocation: string): string => {
+const parseLocation = (eventLocation: string): string => {
 	// try to parse the venue from the eventLocation
 	const regex = /^(.*?);?\s*(.*?),\s*(.*?),\s*([A-Z]{2})\s*(\d{5}),\s*(\w+)$/;
 	const match = eventLocation.match(regex);
@@ -158,7 +148,7 @@ export const parseLocation = (eventLocation: string): string => {
 	return match ? match[2] : eventLocation;
 };
 
-export function convertEventToRow(
+function convertEventToRow(
 	calEvent: GoogleAppsScript.Calendar.CalendarEvent,
 ): rowType {
 	const searchVenue = parseLocation(calEvent.getLocation());
