@@ -53,26 +53,29 @@ You make the changes locally and push the changes to the Google cloud account.  
 
 Now your development environment is setup and you have permission to access the required Google assets.
 
-### Making changes
-You will use VS Code to make changes to the .html or typescript code as needed.  Once the changes have been made locally, you can push those change to Google, specifically in this case, to the script that is bound with a specific Google Sheet.  To do this, use the following command:
+### Associating a Google Sheet
+This code executes as a container-bound script where the Google Sheet is the container/default context for the script.  You must first create a Google Sheet, or look up an exsiting Google Sheet in order to get it's __sheetId__.  The id can be found in URL.  It's the part after `https://docs.google.com/spreadsheets/d/` and before the next `/`.  It is a series of 44 letters, numbers, and symbols.
+
+In order to associated this project with a Google Sheet, you will to update the `scriptId` value in `.clasp.json` the Google __sheetId__.  Once this value is updated, then you can make changes to the script in VS Code and push changes to the Google Sheet. 
+
+Note: The code you see is the project is Typescript.  Typescript transpiled in to JavaScript which then gets transpiled into Google AppScript by clasp as part of the push process.  So the code you see in the online AppScript editor will vary slightly from what you see in the source project.  This is expected.
+
+### Pushing changes to the Google Sheet
+You will use VS Code to make changes to the .html or typescript code as needed.  Once the changes have been made locally to the typescript code, you can push those change the associated Google Sheet, 
+
+To do this, use the following command:
 ```clasp push```
-This will file if you are not logged Google using clasp
+This will fail if you are not logged into Google using clasp
 
 ### Updating the git repository
-Although the transpiled App Script code lives in the associated Google Sheet, the original Typesript/Javascript code lives in github.   Once you are ready to make your changes permanent, remember to do a `git push` so that the code on the github repository is updated with your local changes.
+Although the code is transpiled and copied into the associated Google Sheet, the original Typesript source code project lives in github.  Once you are ready to make your changes permanent, remember to do a `git commit ` and `git push` so that the source code on the github repository is updated with your local changes.
 
 ### To run the script from the Google Sheet
 1. Open the Google Sheet:
 ```https://docs.google.com/spreadsheets/d/1a8PYEsNdVhQFG0-al3SKDRLsX5YyQq3_nWhu4rJiURw/edit?gid=0#gid=0```
 2. Click Extentions > App Script - You should see the online App Script editor and the files that got uploaded when you did `clasp push`.  
-**NOTE:**  The code you see here will be slightly different than what you saw in VS Code.   The code in VS Code is Typescript, which gets compiled down to plain Javascript and then transpiled into AppScript (which is what you see in the online AppScript editor). I recommend you always make your changes to the Typescript file in VSCode and use `clasp push` to modify the App Script bound to the sheet.  Avoid making changes directly to the App Script.
+**NOTE:**  I recommend you always make your changes to the Typescript file in the source project and use `clasp push` to modify the App Script bound to the sheet.  Avoid making permanent changes directly to the App Script.
 
 
 ### To debug the script from the Google Sheet
 There are several test functions writen into the code that will help debug issues.  You can write more in Typescript, compile them  and run them from the online AppScript editory using the Debug function and selecting the specific test function to execute.  All test functions are prefixed with `test_`.
-
-
-
-
-
-
