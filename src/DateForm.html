@@ -1,80 +1,172 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-	<style>
-		body {
-			font-family: Arial, sans-serif;
-			text-align: center;
-			padding: 20px;
-		}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Date Range Picker Web App</title>
 
-		.row {
-			margin-bottom: 16px;
-		}
+  <!-- React and ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-		label {
-			font-size: 16px;
-			display: inline;
-			margin-bottom: 8px;
-		}
+  <!-- Material-UI Core -->
+  <script src="https://cdn.jsdelivr.net/npm/@mui/material@5.15.2/umd/material-ui.production.min.js"></script>
 
-		input {
-			font-size: 14px;
-			padding: 8px;
-			border: 1px solid #ccc;
-			border-radius: 5px;
-		}
+  <!-- Flatpickr Date Picker -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-		button {
-			padding: 10px 20px;
-			background-color: #007BFF;
-			color: white;
-			border: none;
-			border-radius: 5px;
-			cursor: pointer;
-			font-size: 14px;
-		}
-
-		button:hover {
-			background-color: #0056b3;
-		}
-	</style>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f4f4f4;
+      margin: 0;
+    }
+  </style>
 </head>
-
 <body>
-	<div class="row">
-		<label>Start Date: </label>
-		<input type="date" id="startDateInput">
-	</div>
-	<div class="row">
-		<label>End Date: </label>
-		<input type="date" id="endDateInput">
-	</div>
-	<div>
-		<button onclick="submitDate()">Submit</button>
-	</div>
 
-	<script>
-		function formatDate(date) {
-			return date.toISOString().split('T')[0];
-		}
+<div id="root"></div>
 
-		const todayFormatted = formatDate(new Date());
-		document.getElementById("startDateInput").value = todayFormatted;
+<script>
+  const { useState, useEffect, useRef } = React;
+  const { TextField, Button, Box, Typography, Paper, ThemeProvider, createTheme } = MaterialUI;
 
-		let futureDate = new Date();
-		futureDate.setDate(futureDate.getDate()+7);
-		let futureDateFormatted = formatDate(futureDate);
-		document.getElementById("endDateInput").value = futureDateFormatted;
+  // Define Material UI Theme
+  const theme = createTheme({
+    palette: {
+      primary: {
+        main: "#1976d2",
+      },
+      background: {
+        default: "#f4f4f4",
+      },
+    },
+    typography: {
+      fontFamily: "Arial, sans-serif",
+    },
+  });
 
-		function submitDate() {
-			var startDate = document.getElementById('startDateInput').value;
-			var endDate = document.getElementById('endDateInput').value;
-			google.script.run.main(startDate, endDate);
-			google.script.host.close();
-		}
-	</script>
+  function DateRangePicker() {
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+    const [submitted, setSubmitted] = useState(false);
+    const startInputRef = useRef(null);
+    const endInputRef = useRef(null);
+
+    useEffect(() => {
+      flatpickr(startInputRef.current, {
+        enableTime: false,
+        dateFormat: "Y-m-d",
+        onChange: function (selectedDates) {
+          setStartDate(selectedDates[0]);
+        },
+      });
+
+      flatpickr(endInputRef.current, {
+        enableTime: false,
+        dateFormat: "Y-m-d",
+        onChange: function (selectedDates) {
+          setEndDate(selectedDates[0]);
+        },
+      });
+    }, []);
+
+    const handleSubmit = () => {
+      if (!startDate || !endDate) {
+        alert("Please select both start and end dates.");
+        return;
+      }
+
+      // Set times: 4 AM Start, 3:59:59 PM End (EST)
+      const start = new Date(startDate);
+      start.setHours(4, 0, 0);
+
+      const end = new Date(endDate);
+	  end.setDate(end.getDate() + 1); 
+      end.setHours(3, 59, 59);
+
+      google.script.run.main(start.toISOString(), end.toISOString());
+
+      // Hide the form and show the success message
+      setSubmitted(true);
+      google.script.host.close();
+    };
+
+    return React.createElement(
+      ThemeProvider,
+      { theme },
+      React.createElement(
+        Box,
+        {
+          sx: {
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100vh",
+            backgroundColor: "background.default",
+          },
+        },
+        submitted
+          ? React.createElement(
+              Paper,
+              {
+                elevation: 3,
+                sx: {
+                  padding: 3,
+                  width: "100%",
+                  maxWidth: 400,
+                  textAlign: "center",
+                },
+              },
+              React.createElement(Typography, { variant: "h5", color: "primary", gutterBottom: true }, "Success!"),
+              React.createElement(Typography, { variant: "body1" }, "Your dates have been submitted.")
+            )
+          : React.createElement(
+              Paper,
+              {
+                elevation: 3,
+                sx: {
+                  padding: 3,
+                  width: "100%",
+                  maxWidth: 400,
+                  textAlign: "center",
+                },
+              },
+              React.createElement(Typography, { variant: "h5", gutterBottom: true }, "Select Date Range"),
+              React.createElement(TextField, {
+                inputRef: startInputRef,
+                label: "Start Date",
+                variant: "outlined",
+                fullWidth: true,
+                sx: { mb: 2 },
+                InputLabelProps: { shrink: true } // 👈 Fixes the label overlay issue
+              }),
+              React.createElement(TextField, {
+                inputRef: endInputRef,
+                label: "End Date",
+                variant: "outlined",
+                fullWidth: true,
+                sx: { mb: 2 },
+                InputLabelProps: { shrink: true } // 👈 Fixes the label overlay issue
+              }),
+              React.createElement(Button, {
+                variant: "contained",
+                color: "primary",
+                fullWidth: true,
+                onClick: handleSubmit,
+              }, "Submit")
+            )
+      )
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(DateRangePicker));
+</script>
+
 </body>
-
 </html>

@@ -10,8 +10,6 @@ const matchAlgorithm: matchAlgorithmType = "jaroWinkler";
 // Read the sheets values into these variables
 const venueDataRows = readSheetById(VenueSheetId);
 const artistDataRows = readSheetById(BandsSheetId);
-const lookupSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LOOKUP");
-lookupSheet?.clearContents();
 
 type matchAlgorithmType = "jaroWinkler" | "levenshteinDistance" | "off";
 type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
@@ -67,23 +65,23 @@ type rowType = {
 };
 
 type VenueDataType = {
-	venueName: string,
-	venueAddress?: string,
-	venueCountry?: string,
-	venueCountryAbbreviation?: string,
-	venueRegion?: string,
-	venueState?: string,
-	venueStateAbbreviation?: string,
-	venueCity?: string,
-	venueNeighborHood?: string,
-	venueZip?: string,
-	venuePhone?: string,
-}
+	venueName: string;
+	venueAddress?: string;
+	venueCountry?: string;
+	venueCountryAbbreviation?: string;
+	venueRegion?: string;
+	venueState?: string;
+	venueStateAbbreviation?: string;
+	venueCity?: string;
+	venueNeighborHood?: string;
+	venueZip?: string;
+	venuePhone?: string;
+};
 
 type ArtistDataType = {
-	artistName: string,
-	genre?: string
-}
+	artistName: string;
+	genre?: string;
+};
 interface Event {
 	getStartTime(): Date;
 	getEndTime(): Date;
@@ -120,9 +118,9 @@ function onOpen() {
 }
 
 function showDateForm() {
-	const html = HtmlService.createHtmlOutputFromFile("src/DateForm")
-		.setWidth(300)
-		.setHeight(200);
+	const html = HtmlService.createHtmlOutputFromFile("DateForm")
+		.setWidth(600)
+		.setHeight(400);
 	SpreadsheetApp.getUi().showModalDialog(html, "Query data range");
 }
 
@@ -132,10 +130,7 @@ function getCalenderEvents(
 ): GoogleAppsScript.Calendar.CalendarEvent[] {
 	const calendar = CalendarApp.getCalendarById(calendarId);
 
-	const calendarEvents = calendar.getEvents(
-		startDate,
-		endDate,
-	);
+	const calendarEvents = calendar.getEvents(startDate, endDate);
 	return calendarEvents;
 }
 
@@ -151,51 +146,42 @@ const parseLocation = (eventLocation: string): string => {
 function convertEventToRow(
 	calEvent: GoogleAppsScript.Calendar.CalendarEvent,
 ): rowType {
+	const startDate = Utilities.formatDate(
+		calEvent.getStartTime(),
+		Session.getScriptTimeZone(),
+		"MM/dd/yyyy",
+	);
+	const endDate = Utilities.formatDate(
+		calEvent.getEndTime(),
+		Session.getScriptTimeZone(),
+		"MM/dd/yyyy",
+	);
+	const startTime = calEvent.getStartTime().toLocaleTimeString();
+	const endTime = calEvent.getEndTime().toLocaleTimeString();
+
 	const searchVenue = parseLocation(calEvent.getLocation());
 	const searchArtitst = calEvent.getTitle();
- 	const { venue, found: foundVenue } = matchVenue(searchVenue);
+	const { venue, found: foundVenue } = matchVenue(searchVenue);
 	const { artist, found: foundArtist } = matchArtist(searchArtitst);
 
-	let misMatchData = "";
-
-	if (!foundVenue) {
-		Logger.log(`No match found for venue: ${venue.venueName}`);
-		lookupSheet?.appendRow(["Venue", venue.venueName])
-	}
-
-	if (!foundArtist) {
-		Logger.log(`No match found for artist: ${artist.artistName}`);
-		lookupSheet?.appendRow(["Artist", artist.artistName])
-	}
-
-	if (!foundVenue && !foundArtist) {
-		misMatchData += 'Artist & Venue mismatch'
-	} else if (!foundVenue && foundArtist) {
-		misMatchData += 'Venue mismatch'
-	} else if (foundVenue && !foundArtist) {
-		misMatchData += 'Artist mismatch'
-	}
-	
 	const row = {
+		"Mismatch Artist": `${!foundArtist ? artist.artistName : ""}`,
+		"Mismatch Venue": `${!foundVenue ? venue.venueName : ""}`,
+		"Start Date": startDate,
+		"End Date": endDate,
+		"Start Time": startTime,
+		"End Time": endTime,
 		"Event Title": artist.artistName,
-		"Event SEO Title": misMatchData,
+		"Event SEO Title": "",
 		"Event email": "",
 		"Event URL": "",
 		"Event Venue": venue.venueName,
 		"Event Address": venue?.venueAddress,
 		"Event Contact Name": "",
-		"Event Start Date": Utilities.formatDate(
-			calEvent.getStartTime(),
-			Session.getScriptTimeZone(),
-			"MM/dd/yyyy",
-		),
-		"Event End Date": Utilities.formatDate(
-			calEvent.getEndTime(),
-			Session.getScriptTimeZone(),
-			"MM/dd/yyyy",
-		),
-		"Event Start Time": calEvent.getStartTime().toLocaleTimeString(),
-		"Event End Time": calEvent.getEndTime().toLocaleTimeString(),
+		"Event Start Date": startDate,
+		"Event End Date": endDate,
+		"Event Start Time": startTime,
+		"Event End Time": endTime,
 		"Event Country": venue?.venueCountry,
 		"Event Country Abbreviation": venue?.venueCountryAbbreviation,
 		"Event Region": venue?.venueRegion,
@@ -258,6 +244,12 @@ function writeRowsToSheet(rawData: rowType[]) {
 		SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 	const numRows = data.length;
 	const numCols = data[0].length;
+
+	const lastRow = sheet.getLastRow();
+	if (lastRow > 1) {
+	  sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+	}
+  
 	sheet
 		.getRange(FIRST_DATA_ROW, 1, numRows, numCols)
 		.setValues(Object.values(data));
@@ -312,16 +304,30 @@ function getArtistData(): ArtistDataType[] {
 	return artistData.sort((a, b) => a.artistName.localeCompare(b.artistName));
 }
 
-function matchVenue(venueName: string): { venue: VenueDataType, found: boolean } {
+function matchVenue(venueName: string): {
+	venue: VenueDataType;
+	found: boolean;
+} {
 	const venueData = getVenueData();
-	const filtered = venueData.filter((venue) => matchWrapper(venue.venueName, venueName));
-	return (filtered.length === 0) ? {venue: {venueName}, found: false} : {venue: filtered[0], found: true}
+	const filtered = venueData.filter((venue) =>
+		matchWrapper(venue.venueName, venueName),
+	);
+	return filtered.length === 0
+		? { venue: { venueName }, found: false }
+		: { venue: filtered[0], found: true };
 }
 
-function matchArtist(artistName: string): { artist: ArtistDataType; found: boolean } {
+function matchArtist(artistName: string): {
+	artist: ArtistDataType;
+	found: boolean;
+} {
 	const artistData = getArtistData();
-	const filtered = artistData.filter((artist) => matchWrapper(artist.artistName, artistName));
-	return (filtered.length === 0) ? { artist: {artistName}, found: false } : { artist: filtered[0], found: true };
+	const filtered = artistData.filter((artist) =>
+		matchWrapper(artist.artistName, artistName),
+	);
+	return filtered.length === 0
+		? { artist: { artistName }, found: false }
+		: { artist: filtered[0], found: true };
 }
 
 function matchWrapper(string1: string, string2: string) {

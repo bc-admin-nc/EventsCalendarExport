@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "main": "src/Code.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "push:master": "node ./script/updateClaspBinding.js master; clasp push",
+    "push:dev": "node ./script/updateClaspBinding.js dev; clasp push"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/google-apps-script": "^1.0.96",
+    "@types/google-apps-script": "^1.0.97",
     "typescript": "^5.7.3"
   },
   "description": ""
