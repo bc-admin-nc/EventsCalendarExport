@@ -2,6 +2,7 @@
 const VenueSheetId = "1y55O_-39m1YBUEWInNKYUFbxrKLehpLKpyklgV_tFqA";
 const BandsSheetId = "1Y_c0qHMdTQlBrSzHYWT1cdelnucRU2rTLae3fQW4UHU";
 const calendarId = "localmusic@bandsandclubsofthetriangle.com";
+const SheetName = "Sheet1";
 
 const FIRST_DATA_ROW = 2; // start populating sheet on this row
 const MATCH_THRESHOLD = 0.9; // used for fuzzy matching
@@ -10,6 +11,8 @@ const matchAlgorithm: matchAlgorithmType = "jaroWinkler";
 // Read the sheets values into these variables
 const venueDataRows = readSheetById(VenueSheetId);
 const artistDataRows = readSheetById(BandsSheetId);
+const artistData = getArtistData();
+const venueData = getVenueData();
 
 type matchAlgorithmType = "jaroWinkler" | "levenshteinDistance" | "off";
 type MMDDYYYY = string & { __format: "MM/DD/YYYY" };
@@ -270,35 +273,62 @@ function main(startDateString: string, endDateString: string): rowType[] {
 
 // fetch and match routines from other sheets
 function readSheetById(sheetId: string): string[][] {
-	const sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1"); // Change sheet name if needed
+	const sheet = SpreadsheetApp.openById(sheetId).getSheetByName(SheetName); // Change sheet name if needed
 	const data = sheet?.getDataRange().getValues();
 	return data || [];
 }
 
+function getColumnIndexByName(sheet:GoogleAppsScript.Spreadsheet.Sheet, columnName: string): number {
+	const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+	return headers.indexOf(columnName); // Returns -1 if not found
+  }
+
 function getVenueData(): VenueDataType[] {
+	const sheet = SpreadsheetApp.openById(VenueSheetId).getSheetByName(SheetName);
+	if (!sheet) {
+		throw new Error(`Sheet with ID ${VenueSheetId} not found`);
+	}
+    const nameIndex = getColumnIndexByName(sheet,'Listing Title');
+    const addressIndex = getColumnIndexByName(sheet,'Listing Address');
+    const countryIndex = getColumnIndexByName(sheet,'Listing Country');
+    const countryAbbreviationIndex = 7;
+    const regionIndex = getColumnIndexByName(sheet,'Listing Region');
+    const stateIndex = getColumnIndexByName(sheet,'Listing State');
+    const stateAbberviationIndex = getColumnIndexByName(sheet,'Listing State Abbreviation');
+    const cityIndex = getColumnIndexByName(sheet,'Listing City');
+    const neighborhoodIndex = getColumnIndexByName(sheet,'Listing Neighborhood');
+    const zipIndex = getColumnIndexByName(sheet,'Listing Postal Code');
+    const phoneIndex = getColumnIndexByName(sheet,'Listing Phone');
+
 	const venueData = venueDataRows.map((row) => {
 		return {
-			venueName: row[0],
-			venueAddress: row[4],
-			venueCountry: row[6],
-			venueCountryAbbreviation: row[7],
-			venueRegion: row[8],
-			venueState: row[10],
-			venueStateAbbreviation: row[11],
-			venueCity: row[12],
-			venueNeighborHood: row[14],
-			venueZip: row[16],
-			venuePhone: row[19],
+            venueName: row[nameIndex],
+            venueAddress: row[addressIndex],
+            venueCountry: row[countryIndex],
+            venueCountryAbbreviation: row[countryAbbreviationIndex],
+            venueRegion: row[regionIndex],
+            venueState: row[stateIndex],
+            venueStateAbbreviation: row[stateAbberviationIndex],
+            venueCity: row[cityIndex],
+            venueNeighborHood: row[neighborhoodIndex],
+            venueZip: row[zipIndex],
+            venuePhone: row[phoneIndex],
 		};
 	});
 	return venueData.sort((a, b) => a.venueName.localeCompare(b.venueName));
 }
 
 function getArtistData(): ArtistDataType[] {
+	const sheet = SpreadsheetApp.openById(BandsSheetId).getSheetByName(SheetName);
+	if (!sheet) {
+		throw new Error(`Sheet with ID ${BandsSheetId} not found`);
+	}
+    const artistNameIndex = getColumnIndexByName(sheet,'Name');
+    const genreIndex = getColumnIndexByName(sheet,'Genres');
 	const artistData = artistDataRows.map((row) => {
 		return {
-			artistName: row[0],
-			genre: row[1],
+			artistName: row[artistNameIndex],
+			genre: row[genreIndex],
 		};
 	});
 	return artistData.sort((a, b) => a.artistName.localeCompare(b.artistName));
